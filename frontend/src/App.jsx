@@ -3,20 +3,17 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './firebase';
 import Auth from './components/Auth';
 import ChatLayout from './components/ChatLayout';
+import NicknameModal from './components/NicknameModal';
 import { Moon, Sun } from 'lucide-react';
 
 function App() {
   const [user, setUser] = useState(null);
+  const [nickname, setNickname] = useState(null);
+  const [showNicknameModal, setShowNicknameModal] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // For testing without Firebase
-    window.mockLogin = (name) => {
-      setUser({ uid: name, displayName: name, photoURL: `https://ui-avatars.com/api/?name=${name}` });
-      setLoading(false);
-    };
-
     // Check local storage for dark mode preference
     const isDark = localStorage.getItem('darkMode') === 'true';
     setDarkMode(isDark);
@@ -26,6 +23,15 @@ function App() {
 
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
+      if (currentUser) {
+        const storedNickname = localStorage.getItem(`nickname_${currentUser.uid}`);
+        if (storedNickname) {
+          setNickname(storedNickname);
+        } else {
+          setNickname(currentUser.displayName);
+          setShowNicknameModal(true);
+        }
+      }
       setLoading(false);
     });
 
@@ -41,6 +47,12 @@ function App() {
       document.documentElement.classList.remove('dark');
       localStorage.setItem('darkMode', 'false');
     }
+  };
+
+  const handleSaveNickname = (newName) => {
+    setNickname(newName);
+    localStorage.setItem(`nickname_${user.uid}`, newName);
+    setShowNicknameModal(false);
   };
 
   if (loading) {
@@ -75,7 +87,20 @@ function App() {
         {!user ? (
           <Auth />
         ) : (
-          <ChatLayout user={user} />
+          <>
+            <ChatLayout 
+              user={{ ...user, displayName: nickname || user.displayName }} 
+              onOpenNickname={() => setShowNicknameModal(true)} 
+            />
+            {showNicknameModal && (
+              <NicknameModal 
+                currentNickname={nickname}
+                onSave={handleSaveNickname}
+                onClose={() => setShowNicknameModal(false)}
+                isForce={!localStorage.getItem(`nickname_${user.uid}`)}
+              />
+            )}
+          </>
         )}
       </main>
     </div>

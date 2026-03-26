@@ -25,59 +25,104 @@ const io = new Server(httpServer, {
 const rooms = new Map();
 
 // Initialize generic default room
-rooms.set('general', { id: 'general', name: 'General', users: [], messages: [] });
+rooms.set('general', { id: 'general', name: 'General', users: [], messages: [], isPrivate: false });
 
 io.on('connection', (socket) => {
   console.log(`User connected: ${socket.id}`);
 
-  // Handle joining a room
-  socket.on('join_room', ({ roomId, user }) => {
-    socket.join(roomId);
-
-    // Create room if it doesn't exist
-    if (!rooms.has(roomId)) {
-      rooms.set(roomId, { id: roomId, name: roomId, users: [], messages: [] });
+  socket.on('join_room', ({ roomId, user, isPrivate, password }) => {
+    if (rooms.has(roomId)) {
+      const existingRoom = rooms.get(roomId);
+      if (existingRoom.isPrivate && existingRoom.password !== password) {
+        socket.emit('join_error', '비밀번호가 일치하지 않습니다.');
+        return;
+      }
+    } else {
+      rooms.set(roomId, { 
+        id: roomId, 
+        name: roomId, 
+        users: [], 
+        messages: [],
+        isPrivate: !!isPrivate,
+        password: password || ''
+      });
+      io.emit('room_update');
     }
 
     const room = rooms.get(roomId);
-
-    // Add user to room's active user list if not already present
-    // using user.uid (Firebase UID)
-    if (user && !room.users.find(u => u.uid === user.uid)) {
-      room.users.push(user);
+    socket.join(roomId);
+    
+    if (user) {
+      const existingUser = room.users.find(u => u.uid === user.uid);
+      if (!existingUser) {
+        room.users.push({ ...user, socketId: socket.id });
+      } else {
+        existingUser.socketId = socket.id;
+      }
     }
-
-    // Send previous messages and current room state to the joining user
+    
+    socket.emit('join_success', roomId);
     socket.emit('room_data', room);
-
-    // Broadcast to others in the room that user joined
     io.to(roomId).emit('room_update', room);
-    console.log(`User ${user?.displayName || 'Anonymous'} joined room ${roomId}`);
+    io.emit('room_update');
   });
 
-  // Handle receiving a message
+  socket.on('leave_room', ({ roomId, userUid }) => {
+    const room = rooms.get(roomId);
+    if (room && userUid) {
+      room.users = room.users.filter(u => u.uid !== userUid);
+      socket.leave(roomId);
+      io.to(roomId).emit('room_update', room);
+      io.emit('room_update');
+    }
+  });
+
   socket.on('send_message', ({ roomId, message }) => {
     const room = rooms.get(roomId);
     if (room) {
+      message.readBy = [message.sender.uid];
       room.messages.push(message);
-      // Broadcast message to everyone in the room (including sender)
       io.to(roomId).emit('receive_message', message);
     }
   });
 
-  // Serve available rooms
+  socket.on('mark_read', ({ roomId, userUid }) => {
+    const room = rooms.get(roomId);
+    if (room && userUid) {
+      let updated = false;
+      room.messages.forEach(msg => {
+        if (!msg.readBy) msg.readBy = [];
+        if (!msg.readBy.includes(userUid)) {
+          msg.readBy.push(userUid);
+          updated = true;
+        }
+      });
+      if (updated) {
+        io.to(roomId).emit('room_data', room);
+      }
+    }
+  });
+
   socket.on('get_rooms', () => {
     const roomList = Array.from(rooms.values()).map(r => ({
       id: r.id,
       name: r.name,
-      usersCount: r.users.length
+      usersCount: r.users.length,
+      isPrivate: r.isPrivate
     }));
     socket.emit('room_list', roomList);
   });
 
   socket.on('disconnect', () => {
     console.log(`User disconnected: ${socket.id}`);
-    // A robust implementation would remove the user from all rooms they were in
+    for (const [roomId, room] of rooms.entries()) {
+      const userIndex = room.users.findIndex(u => u.socketId === socket.id);
+      if (userIndex !== -1) {
+        room.users.splice(userIndex, 1);
+        io.to(roomId).emit('room_update', room);
+      }
+    }
+    io.emit('room_update');
   });
 });
 

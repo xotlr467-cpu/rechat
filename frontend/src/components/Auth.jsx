@@ -60,12 +60,7 @@ const Auth = () => {
             </>
           )}
         </button>
-
-        {/* Development test buttons */}
-        <div className="mt-4 flex gap-4 w-full">
-          <button onClick={() => window.mockLogin?.('UserA')} className="flex-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 py-3 rounded-xl text-sm font-semibold transition-colors border border-emerald-200 shadow-sm">Test User A</button>
-          <button onClick={() => window.mockLogin?.('UserB')} className="flex-1 bg-amber-50 hover:bg-amber-100 text-amber-800 py-3 rounded-xl text-sm font-semibold transition-colors border border-amber-200 shadow-sm">Test User B</button>
-        </div>
+        {/* Test buttons removed for production */}
       </div>
     </div>
   );

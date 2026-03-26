@@ -4,8 +4,9 @@ import ChatRoom from './ChatRoom';
 import { socket } from '../socket';
 import { Menu, X } from 'lucide-react';
 
-const ChatLayout = ({ user }) => {
+const ChatLayout = ({ user, onOpenNickname }) => {
   const [activeRoom, setActiveRoom] = useState('general');
+  const [roomConfig, setRoomConfig] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
@@ -20,8 +21,9 @@ const ChatLayout = ({ user }) => {
     setIsSidebarOpen(!isSidebarOpen);
   };
 
-  const handleRoomSelect = (roomId) => {
+  const handleRoomSelect = (roomId, config = null) => {
     setActiveRoom(roomId);
+    setRoomConfig(config);
     setIsSidebarOpen(false);
   };
 
@@ -48,7 +50,7 @@ const ChatLayout = ({ user }) => {
             <X size={24} />
           </button>
         </div>
-        <Sidebar user={user} activeRoom={activeRoom} onSelectRoom={handleRoomSelect} />
+        <Sidebar user={user} activeRoom={activeRoom} onSelectRoom={handleRoomSelect} onOpenNickname={onOpenNickname} />
       </div>
 
       {/* Main Chat Area */}
@@ -65,7 +67,7 @@ const ChatLayout = ({ user }) => {
           </div>
         </div>
         
-        <ChatRoom user={user} roomId={activeRoom} />
+        <ChatRoom user={user} roomId={activeRoom} roomConfig={roomConfig} onLeaveRoom={() => handleRoomSelect('general')} />
       </div>
     </div>
   );

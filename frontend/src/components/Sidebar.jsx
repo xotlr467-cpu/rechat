@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { socket } from '../socket';
-import { Hash, Plus, LogOut } from 'lucide-react';
+import { Hash, Plus, LogOut, Settings, Lock } from 'lucide-react';
 import { auth } from '../firebase';
 
-const Sidebar = ({ user, activeRoom, onSelectRoom }) => {
+const Sidebar = ({ user, activeRoom, onSelectRoom, onOpenNickname }) => {
   const [rooms, setRooms] = useState([]);
   const [newRoomName, setNewRoomName] = useState('');
+  const [isPrivate, setIsPrivate] = useState(false);
+  const [password, setPassword] = useState('');
   const [isCreating, setIsCreating] = useState(false);
 
   useEffect(() => {
@@ -32,14 +34,18 @@ const Sidebar = ({ user, activeRoom, onSelectRoom }) => {
     e.preventDefault();
     if (newRoomName.trim()) {
       const formattedName = newRoomName.trim().toLowerCase().replace(/\s+/g, '-');
-      onSelectRoom(formattedName);
+      onSelectRoom(formattedName, { isPrivate, password });
       setNewRoomName('');
+      setIsPrivate(false);
+      setPassword('');
       setIsCreating(false);
     }
   };
 
   const handleSignOut = () => {
-    auth.signOut();
+    if (window.confirm("정말 로그아웃 하시겠습니까?")) {
+      auth.signOut();
+    }
   };
 
   return (
@@ -62,9 +68,23 @@ const Sidebar = ({ user, activeRoom, onSelectRoom }) => {
               placeholder="e.g. general"
               value={newRoomName}
               onChange={(e) => setNewRoomName(e.target.value)}
-              className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white placeholder-gray-400 text-sm"
+              className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white placeholder-gray-400 text-sm mb-2"
               autoFocus
             />
+            <div className="flex items-center gap-2 mb-2 px-1">
+              <input type="checkbox" id="isPrivate" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)} className="rounded text-blue-500" />
+              <label htmlFor="isPrivate" className="text-xs text-gray-600 dark:text-gray-300">비밀방 만들기</label>
+            </div>
+            {isPrivate && (
+              <input
+                type="password"
+                placeholder="비밀번호 설정"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white placeholder-gray-400 text-sm mb-2"
+              />
+            )}
+            <button type="submit" disabled={!newRoomName.trim() || (isPrivate && !password.trim())} className="w-full py-2 bg-blue-500 text-white rounded-xl text-sm font-semibold hover:bg-blue-600 disabled:opacity-50">생성하기</button>
           </form>
         )}
 
@@ -80,7 +100,11 @@ const Sidebar = ({ user, activeRoom, onSelectRoom }) => {
               }`}
             >
               <div className="flex items-center gap-3 overflow-hidden">
-                <Hash size={18} className={activeRoom === room.id ? 'opacity-100 flex-shrink-0' : 'opacity-40 group-hover:opacity-70 flex-shrink-0'} />
+                {room.isPrivate ? (
+                  <Lock size={16} className={activeRoom === room.id ? 'opacity-100 flex-shrink-0' : 'opacity-40 group-hover:opacity-70 flex-shrink-0'} />
+                ) : (
+                  <Hash size={18} className={activeRoom === room.id ? 'opacity-100 flex-shrink-0' : 'opacity-40 group-hover:opacity-70 flex-shrink-0'} />
+                )}
                 <span className="font-medium truncate">{room.name}</span>
               </div>
               <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ml-2 ${
@@ -97,14 +121,19 @@ const Sidebar = ({ user, activeRoom, onSelectRoom }) => {
 
       <div className="mt-auto border-t border-gray-200 dark:border-gray-700 p-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3 overflow-hidden">
-            <img 
-              src={user.photoURL || `https://ui-avatars.com/api/?name=${user.displayName}`} 
-              alt="Profile" 
-              className="w-10 h-10 rounded-full border border-gray-200 dark:border-gray-700"
-            />
-            <div className="truncate pr-2">
-              <div className="text-sm font-bold text-gray-900 dark:text-white truncate">
+          <div className="flex items-center gap-3 overflow-hidden flex-1">
+            <div className="relative cursor-pointer group" onClick={onOpenNickname}>
+              <img 
+                src={user.photoURL || `https://ui-avatars.com/api/?name=${user.displayName}`} 
+                alt="Profile" 
+                className="w-10 h-10 rounded-full border border-gray-200 dark:border-gray-700 group-hover:opacity-75 transition"
+              />
+              <div className="absolute -bottom-1 -right-1 bg-white dark:bg-gray-800 rounded-full p-0.5 shadow-sm border border-gray-100 dark:border-gray-700 opacity-0 group-hover:opacity-100 transition-opacity">
+                <Settings size={12} className="text-gray-600 dark:text-gray-300" />
+              </div>
+            </div>
+            <div className="truncate pr-2 cursor-pointer" onClick={onOpenNickname}>
+              <div className="text-sm font-bold text-gray-900 dark:text-white truncate hover:underline underline-offset-2">
                 {user.displayName}
               </div>
               <div className="text-xs text-green-500 font-medium">Online</div>
