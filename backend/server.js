@@ -2,6 +2,11 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 app.use(cors());
@@ -28,23 +33,23 @@ io.on('connection', (socket) => {
   // Handle joining a room
   socket.on('join_room', ({ roomId, user }) => {
     socket.join(roomId);
-    
+
     // Create room if it doesn't exist
     if (!rooms.has(roomId)) {
       rooms.set(roomId, { id: roomId, name: roomId, users: [], messages: [] });
     }
-    
+
     const room = rooms.get(roomId);
-    
+
     // Add user to room's active user list if not already present
     // using user.uid (Firebase UID)
     if (user && !room.users.find(u => u.uid === user.uid)) {
       room.users.push(user);
     }
-    
+
     // Send previous messages and current room state to the joining user
     socket.emit('room_data', room);
-    
+
     // Broadcast to others in the room that user joined
     io.to(roomId).emit('room_update', room);
     console.log(`User ${user?.displayName || 'Anonymous'} joined room ${roomId}`);
@@ -75,6 +80,16 @@ io.on('connection', (socket) => {
     // A robust implementation would remove the user from all rooms they were in
   });
 });
+
+// -------- Serve Frontend in Production --------
+// Serve static files from the React frontend app
+app.use(express.static(path.join(__dirname, '../frontend/dist')));
+
+// Anything that doesn't match the above, send back the index.html file
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
+});
+// ----------------------------------------------
 
 const PORT = process.env.PORT || 3002;
 httpServer.listen(PORT, () => {
