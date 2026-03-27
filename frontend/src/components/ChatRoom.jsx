@@ -70,9 +70,11 @@ const ChatRoom = ({ user, roomId, roomConfig, onLeaveRoom }) => {
       socket.emit('mark_read', { roomId, userUid: user.uid });
     };
 
-    const handleKicked = () => {
-      window.alert("방장에 의해 방에서 강퇴되었습니다.");
-      if (onLeaveRoom) onLeaveRoom();
+    const handleKickNotify = (uid) => {
+      if (user.uid === uid) {
+        window.alert("방장에 의해 방에서 강퇴되었습니다.");
+        if (onLeaveRoom) onLeaveRoom();
+      }
     };
 
     const handleRoomDeleted = () => {
@@ -85,7 +87,7 @@ const ChatRoom = ({ user, roomId, roomConfig, onLeaveRoom }) => {
     socket.on('room_data', handleRoomData);
     socket.on('room_update', handleRoomData); // Realtime sync
     socket.on('receive_message', handleReceiveMessage);
-    socket.on('kicked', handleKicked);
+    socket.on('kick_notify', handleKickNotify);
     socket.on('room_deleted', handleRoomDeleted);
 
     return () => {
@@ -95,7 +97,7 @@ const ChatRoom = ({ user, roomId, roomConfig, onLeaveRoom }) => {
       socket.off('room_data', handleRoomData);
       socket.off('room_update', handleRoomData);
       socket.off('receive_message', handleReceiveMessage);
-      socket.off('kicked', handleKicked);
+      socket.off('kick_notify', handleKickNotify);
       socket.off('room_deleted', handleRoomDeleted);
     };
   }, [roomId, user?.uid]);

@@ -157,7 +157,7 @@ io.on('connection', (socket) => {
         }
       });
       if (updated) {
-        io.to(roomId).emit('room_data', { ...room, password: undefined });
+        broadcastRoomUpdate(room);
       }
     }
   });
@@ -188,11 +188,9 @@ io.on('connection', (socket) => {
         room.bannedUids.push({ uid: targetUser.uid, displayName: targetUser.displayName, photoURL: targetUser.photoURL });
         
         room.users = room.users.filter(u => u.uid !== targetUid);
-        const targetSocket = io.sockets.sockets.get(targetUser.socketId);
-        if (targetSocket) {
-          targetSocket.leave(roomId);
-          targetSocket.emit('kicked');
-        }
+        
+        io.to(roomId).emit('kick_notify', targetUid);
+        
         broadcastRoomUpdate(room);
         emitSafeRoomList();
       }

@@ -11,6 +11,7 @@ const Sidebar = ({ user, activeRoom, onSelectRoom, onOpenNickname }) => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [showAllPrivateRooms, setShowAllPrivateRooms] = useState(false);
 
   const [lastReadCounts, setLastReadCounts] = useState(() => {
     const saved = localStorage.getItem('rechat_read_counts');
@@ -69,6 +70,7 @@ const Sidebar = ({ user, activeRoom, onSelectRoom, onOpenNickname }) => {
   };
 
   const filteredRooms = rooms.filter(room => {
+    if (showAllPrivateRooms) return true;
     if (!searchTerm.trim()) return !room.isPrivate || room.id === activeRoom;
     return room.name.toLowerCase().includes(searchTerm.toLowerCase());
   });
@@ -95,6 +97,17 @@ const Sidebar = ({ user, activeRoom, onSelectRoom, onOpenNickname }) => {
             className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white text-sm"
           />
           <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+        </div>
+
+        <div className="flex items-center justify-between mb-4 flex-shrink-0 px-2 select-none">
+          <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">비밀방 전체 표시</span>
+          <button 
+            type="button"
+            onClick={() => setShowAllPrivateRooms(!showAllPrivateRooms)}
+            className={`relative inline-flex h-4 w-8 items-center rounded-full transition-colors ${showAllPrivateRooms ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-700'}`}
+          >
+            <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${showAllPrivateRooms ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
+          </button>
         </div>
 
         {isCreating && (
