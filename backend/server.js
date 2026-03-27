@@ -95,11 +95,7 @@ io.on('connection', (socket) => {
       room.users = room.users.filter(u => u.uid !== userUid);
       socket.leave(roomId);
       
-      if (room.users.length === 0 && roomId !== 'general') {
-        rooms.delete(roomId);
-      } else {
-        io.to(roomId).emit('room_update', { ...room, password: undefined });
-      }
+      io.to(roomId).emit('room_update', { ...room, password: undefined });
       emitSafeRoomList();
     }
   });
@@ -146,6 +142,40 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('delete_room', ({ roomId, userUid }) => {
+    const room = rooms.get(roomId);
+    if (room && room.creatorUid === userUid && roomId !== 'general') {
+      rooms.delete(roomId);
+      io.to(roomId).emit('room_deleted');
+      emitSafeRoomList();
+    }
+  });
+
+  socket.on('update_password', ({ roomId, userUid, newPassword }) => {
+    const room = rooms.get(roomId);
+    if (room && room.creatorUid === userUid) {
+      room.password = newPassword;
+      socket.emit('room_data', { ...room, password: room.password });
+    }
+  });
+
+  socket.on('kick_user', ({ roomId, userUid, targetUid }) => {
+    const room = rooms.get(roomId);
+    if (room && room.creatorUid === userUid) {
+      const targetUser = room.users.find(u => u.uid === targetUid);
+      if (targetUser) {
+        room.users = room.users.filter(u => u.uid !== targetUid);
+        const targetSocket = io.sockets.sockets.get(targetUser.socketId);
+        if (targetSocket) {
+          targetSocket.leave(roomId);
+          targetSocket.emit('kicked');
+        }
+        io.to(roomId).emit('room_update', { ...room, password: undefined });
+        emitSafeRoomList();
+      }
+    }
+  });
+
   socket.on('get_rooms', () => {
     const roomList = Array.from(rooms.values()).map(r => ({
       id: r.id,
@@ -163,11 +193,7 @@ io.on('connection', (socket) => {
       const userIndex = room.users.findIndex(u => u.socketId === socket.id);
       if (userIndex !== -1) {
         room.users.splice(userIndex, 1);
-        if (room.users.length === 0 && roomId !== 'general') {
-          rooms.delete(roomId);
-        } else {
-          io.to(roomId).emit('room_update', { ...room, password: undefined });
-        }
+        io.to(roomId).emit('room_update', { ...room, password: undefined });
       }
     }
     emitSafeRoomList();

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { socket } from '../socket';
-import { Send, Hash, LogOut, Lock } from 'lucide-react';
+import { Send, Hash, LogOut, Lock, Trash2 } from 'lucide-react';
 
 const ChatRoom = ({ user, roomId, roomConfig, onLeaveRoom }) => {
   const [messages, setMessages] = useState([]);
@@ -9,6 +9,8 @@ const ChatRoom = ({ user, roomId, roomConfig, onLeaveRoom }) => {
   const [roomData, setRoomData] = useState(null);
   const [isJoined, setIsJoined] = useState(false);
   const [showMembers, setShowMembers] = useState(false);
+  const [showPasswordEditor, setShowPasswordEditor] = useState(false);
+  const [newPasswordValue, setNewPasswordValue] = useState('');
 
   const userRef = useRef(user);
   const roomConfigRef = useRef(roomConfig);
@@ -68,10 +70,22 @@ const ChatRoom = ({ user, roomId, roomConfig, onLeaveRoom }) => {
       socket.emit('mark_read', { roomId, userUid: user.uid });
     };
 
+    const handleKicked = () => {
+      window.alert("방장에 의해 방에서 강퇴되었습니다.");
+      if (onLeaveRoom) onLeaveRoom();
+    };
+
+    const handleRoomDeleted = () => {
+      window.alert("방장에 의해 방이 삭제되었습니다.");
+      if (onLeaveRoom) onLeaveRoom();
+    };
+
     socket.on('join_error', handleJoinError);
     socket.on('join_success', handleJoinSuccess);
     socket.on('room_data', handleRoomData);
     socket.on('receive_message', handleReceiveMessage);
+    socket.on('kicked', handleKicked);
+    socket.on('room_deleted', handleRoomDeleted);
 
     return () => {
       socket.emit('leave_room', { roomId, userUid: user?.uid });
@@ -79,6 +93,8 @@ const ChatRoom = ({ user, roomId, roomConfig, onLeaveRoom }) => {
       socket.off('join_success', handleJoinSuccess);
       socket.off('room_data', handleRoomData);
       socket.off('receive_message', handleReceiveMessage);
+      socket.off('kicked', handleKicked);
+      socket.off('room_deleted', handleRoomDeleted);
     };
   }, [roomId, user?.uid]);
 
@@ -129,7 +145,11 @@ const ChatRoom = ({ user, roomId, roomConfig, onLeaveRoom }) => {
           {roomData?.isPrivate ? (
             <button 
               onClick={() => {
-                if (roomData.password) window.alert(`방 비밀번호 (본인만 볼 수 있음): ${roomData.password}`);
+                if(roomData.password) {
+                  setNewPasswordValue(roomData.password);
+                  setShowPasswordEditor(!showPasswordEditor);
+                  setShowMembers(false);
+                }
               }}
               className={`flex items-center justify-center mr-2 ${roomData.password ? 'hover:bg-gray-200 dark:hover:bg-gray-800 p-1.5 rounded-md cursor-pointer transition' : ''}`}
             >
@@ -138,33 +158,81 @@ const ChatRoom = ({ user, roomId, roomConfig, onLeaveRoom }) => {
           ) : <Hash size={24} className="text-gray-400 mr-2 hidden md:block" />}
           <h2 className="text-xl font-bold text-gray-900 dark:text-white max-w-[150px] sm:max-w-none truncate">{roomId}</h2>
           <button 
-            onClick={() => setShowMembers(!showMembers)}
+            onClick={() => {
+              setShowMembers(!showMembers);
+              setShowPasswordEditor(false);
+            }}
             className="ml-4 text-sm text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 px-3 py-1 rounded-full border border-gray-200 dark:border-gray-700 shadow-sm hidden sm:flex items-center hover:bg-gray-50 dark:hover:bg-gray-700 transition"
           >
             {roomData?.users?.length || 0} members
           </button>
         </div>
-        {roomId !== 'general' && (
-          <button onClick={() => { if (window.confirm("방을 나가시겠습니까?")) onLeaveRoom(); }} className="flex items-center gap-2 px-3 py-1.5 text-sm text-red-500 bg-red-50 hover:bg-red-100 dark:bg-red-500/10 dark:hover:bg-red-500/20 rounded-lg transition-colors ml-2 flex-shrink-0">
-            <span className="hidden sm:inline">나가기</span>
-            <LogOut size={16} />
-          </button>
-        )}
+        
+        <div className="flex items-center flex-shrink-0">
+          {roomId !== 'general' && roomData?.creatorUid === user?.uid && (
+            <button onClick={() => { if (window.confirm("정말 이 방을 영구 삭제하시겠습니까? (멤버 전원 강제 퇴장)")) socket.emit('delete_room', { roomId, userUid: user.uid }); }} className="flex items-center gap-2 px-3 py-1.5 text-sm text-red-500 bg-red-50 hover:bg-red-100 dark:bg-red-500/10 dark:hover:bg-red-500/20 rounded-lg transition-colors ml-2">
+              <span className="hidden sm:inline">방 삭제</span>
+              <Trash2 size={16} />
+            </button>
+          )}
+          {roomId !== 'general' && (
+            <button onClick={() => { if (window.confirm("방을 나가시겠습니까?")) onLeaveRoom(); }} className="flex items-center gap-2 px-3 py-1.5 text-sm text-red-500 bg-red-50 hover:bg-red-100 dark:bg-red-500/10 dark:hover:bg-red-500/20 rounded-lg transition-colors ml-2">
+              <span className="hidden sm:inline">나가기</span>
+              <LogOut size={16} />
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Password Dropdown */}
+      {showPasswordEditor && roomData?.isPrivate && roomData?.creatorUid === user?.uid && (
+        <div className="absolute top-[72px] left-6 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-xl z-20 animate-in fade-in slide-in-from-top-2 p-4">
+          <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-2">
+            비밀번호 확인 및 수정
+          </h3>
+          <div className="flex items-center gap-2">
+            <input 
+              type="text" 
+              value={newPasswordValue} 
+              onChange={(e) => setNewPasswordValue(e.target.value)} 
+              className="w-full px-3 py-1.5 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <button 
+              onClick={() => {
+                if (newPasswordValue.trim()) {
+                  socket.emit('update_password', { roomId, userUid: user.uid, newPassword: newPasswordValue });
+                  setShowPasswordEditor(false);
+                }
+              }}
+              className="px-3 py-1.5 text-xs font-semibold bg-blue-500 text-white rounded-lg hover:bg-blue-600 shadow-sm transition-colors"
+            >
+              저장
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Member List Dropdown */}
       {showMembers && (
-        <div className="absolute top-[72px] left-1/2 sm:left-32 -translate-x-1/2 sm:translate-x-0 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-xl z-20 animate-in fade-in slide-in-from-top-2 p-2 hidden sm:block">
+        <div className="absolute top-[72px] left-1/2 sm:left-32 -translate-x-1/2 sm:translate-x-0 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-xl z-20 animate-in fade-in slide-in-from-top-2 p-2 hidden sm:block mt-1">
           <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase px-3 py-2 border-b border-gray-100 dark:border-gray-700 mb-2">
             Participants ({roomData?.users?.length || 0})
           </h3>
           <div className="max-h-60 overflow-y-auto space-y-1">
             {roomData?.users?.map((u) => (
-              <div key={u.uid} className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-gray-50 dark:bg-gray-700/50 transition">
-                <img src={u.photoURL || `https://ui-avatars.com/api/?name=${u.displayName}`} alt="avatar" className="w-8 h-8 rounded-full shadow-sm" />
-                <div className="flex flex-col">
-                  <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{u.displayName}</span>
-                  {u.uid === user.uid && <span className="text-[10px] text-blue-600 font-extrabold bg-blue-50 dark:bg-blue-500/10 dark:text-blue-400 px-1.5 py-0.5 rounded-md w-fit mt-0.5">Me</span>}
+              <div key={u.uid} className="flex items-center justify-between px-3 py-2 rounded-xl hover:bg-gray-50 dark:bg-gray-700/50 transition">
+                <div className="flex items-center gap-3">
+                  <img src={u.photoURL || `https://ui-avatars.com/api/?name=${u.displayName}`} alt="avatar" className="w-8 h-8 rounded-full shadow-sm" />
+                  <div className="flex flex-col">
+                    <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{u.displayName}</span>
+                    {u.uid === user.uid ? (
+                      <span className="text-[10px] text-blue-600 font-extrabold bg-blue-50 dark:bg-blue-500/10 dark:text-blue-400 px-1.5 py-0.5 rounded-md w-fit mt-0.5">Me</span>
+                    ) : (roomData?.creatorUid === user?.uid && (
+                      <button onClick={() => { if(window.confirm(`정말 ${u.displayName}님을 강제로 추방시키겠습니까?`)) socket.emit('kick_user', { roomId, userUid: user.uid, targetUid: u.uid }) }} className="text-[10px] text-red-500 border border-red-200 dark:border-red-500/30 hover:bg-red-50 dark:hover:bg-red-500/10 px-1.5 py-0.5 rounded-md mt-0.5 w-fit font-bold transition">
+                        강퇴
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             ))}
