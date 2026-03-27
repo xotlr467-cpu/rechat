@@ -126,7 +126,16 @@ const ChatRoom = ({ user, roomId, roomConfig, onLeaveRoom }) => {
       <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-gray-900/50 backdrop-blur-md sticky top-0 z-10 w-full relative">
         {/* Only show mobile Menu button spacer so it doesn't overlap text, actual button is in ChatLayout */}
         <div className="flex items-center md:pl-0 pl-10">
-          {roomData?.isPrivate ? <Lock size={20} className="text-gray-400 mr-2" /> : <Hash size={24} className="text-gray-400 mr-2 hidden md:block" />}
+          {roomData?.isPrivate ? (
+            <button 
+              onClick={() => {
+                if (roomData.password) window.alert(`방 비밀번호 (본인만 볼 수 있음): ${roomData.password}`);
+              }}
+              className={`flex items-center justify-center mr-2 ${roomData.password ? 'hover:bg-gray-200 dark:hover:bg-gray-800 p-1.5 rounded-md cursor-pointer transition' : ''}`}
+            >
+              <Lock size={20} className="text-gray-400" />
+            </button>
+          ) : <Hash size={24} className="text-gray-400 mr-2 hidden md:block" />}
           <h2 className="text-xl font-bold text-gray-900 dark:text-white max-w-[150px] sm:max-w-none truncate">{roomId}</h2>
           <button 
             onClick={() => setShowMembers(!showMembers)}

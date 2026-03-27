@@ -25,7 +25,19 @@ const io = new Server(httpServer, {
 const rooms = new Map();
 
 // Initialize generic default room
-rooms.set('general', { id: 'general', name: 'General', users: [], messages: [], isPrivate: false });
+rooms.set('general', { id: 'general', name: 'General', users: [], messages: [], isPrivate: false, creatorUid: 'system', password: '' });
+
+const emitSafeRoomList = () => {
+  const roomList = Array.from(rooms.values()).map(r => ({
+    id: r.id,
+    name: r.name,
+    usersCount: r.users.length,
+    isPrivate: r.isPrivate,
+    messagesCount: r.messages.length
+  }));
+  io.emit('room_update');
+  io.emit('room_list', roomList);
+};
 
 io.on('connection', (socket) => {
   console.log(`User connected: ${socket.id}`);
@@ -33,7 +45,7 @@ io.on('connection', (socket) => {
   socket.on('join_room', ({ roomId, user, isPrivate, password }) => {
     if (rooms.has(roomId)) {
       const existingRoom = rooms.get(roomId);
-      if (existingRoom.isPrivate) {
+      if (existingRoom.isPrivate && user?.uid !== existingRoom.creatorUid) {
         if (!password) {
           socket.emit('join_error', '비밀방입니다. 암호를 입력해주세요.');
           return;
@@ -49,9 +61,10 @@ io.on('connection', (socket) => {
         users: [], 
         messages: [],
         isPrivate: !!isPrivate,
-        password: password || ''
+        password: password || '',
+        creatorUid: user?.uid || null
       });
-      io.emit('room_update');
+      emitSafeRoomList();
     }
 
     const room = rooms.get(roomId);
@@ -67,9 +80,13 @@ io.on('connection', (socket) => {
     }
     
     socket.emit('join_success', roomId);
-    socket.emit('room_data', room);
-    io.to(roomId).emit('room_update', room);
-    io.emit('room_update');
+    // Only send the password if the user is the creator
+    const roomPayload = { ...room, password: (user?.uid === room.creatorUid ? room.password : undefined) };
+    socket.emit('room_data', roomPayload);
+    
+    const safeRoomForOthers = { ...room, password: undefined };
+    io.to(roomId).emit('room_update', safeRoomForOthers);
+    emitSafeRoomList();
   });
 
   socket.on('leave_room', ({ roomId, userUid }) => {
@@ -77,8 +94,13 @@ io.on('connection', (socket) => {
     if (room && userUid) {
       room.users = room.users.filter(u => u.uid !== userUid);
       socket.leave(roomId);
-      io.to(roomId).emit('room_update', room);
-      io.emit('room_update');
+      
+      if (room.users.length === 0 && roomId !== 'general') {
+        rooms.delete(roomId);
+      } else {
+        io.to(roomId).emit('room_update', { ...room, password: undefined });
+      }
+      emitSafeRoomList();
     }
   });
 
@@ -92,8 +114,7 @@ io.on('connection', (socket) => {
         updated = true;
       }
       if (updated) {
-        io.to(roomId).emit('room_update', room);
-        io.emit('room_update');
+        io.to(roomId).emit('room_update', { ...room, password: undefined });
       }
     }
   });
@@ -104,6 +125,7 @@ io.on('connection', (socket) => {
       message.readBy = [message.sender.uid];
       room.messages.push(message);
       io.to(roomId).emit('receive_message', message);
+      emitSafeRoomList(); // Update message counts globally
     }
   });
 
@@ -119,7 +141,7 @@ io.on('connection', (socket) => {
         }
       });
       if (updated) {
-        io.to(roomId).emit('room_data', room);
+        io.to(roomId).emit('room_data', { ...room, password: undefined });
       }
     }
   });
@@ -129,7 +151,8 @@ io.on('connection', (socket) => {
       id: r.id,
       name: r.name,
       usersCount: r.users.length,
-      isPrivate: r.isPrivate
+      isPrivate: r.isPrivate,
+      messagesCount: r.messages.length
     }));
     socket.emit('room_list', roomList);
   });
@@ -140,10 +163,14 @@ io.on('connection', (socket) => {
       const userIndex = room.users.findIndex(u => u.socketId === socket.id);
       if (userIndex !== -1) {
         room.users.splice(userIndex, 1);
-        io.to(roomId).emit('room_update', room);
+        if (room.users.length === 0 && roomId !== 'general') {
+          rooms.delete(roomId);
+        } else {
+          io.to(roomId).emit('room_update', { ...room, password: undefined });
+        }
       }
     }
-    io.emit('room_update');
+    emitSafeRoomList();
   });
 });
 

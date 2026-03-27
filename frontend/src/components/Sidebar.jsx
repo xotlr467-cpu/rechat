@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { socket } from '../socket';
-import { Hash, Plus, LogOut, Settings, Lock, Eye, EyeOff } from 'lucide-react';
+import { Hash, Plus, LogOut, Settings, Lock, Eye, EyeOff, Search } from 'lucide-react';
 import { auth } from '../firebase';
 
 const Sidebar = ({ user, activeRoom, onSelectRoom, onOpenNickname }) => {
   const [rooms, setRooms] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
   const [newRoomName, setNewRoomName] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
   const [password, setPassword] = useState('');
@@ -49,10 +50,15 @@ const Sidebar = ({ user, activeRoom, onSelectRoom, onOpenNickname }) => {
     }
   };
 
+  const filteredRooms = rooms.filter(room => {
+    if (!searchTerm.trim()) return !room.isPrivate;
+    return room.name.toLowerCase().includes(searchTerm.toLowerCase());
+  });
+
   return (
-    <div className="flex flex-col h-full">
-      <div className="p-6">
-        <div className="flex items-center justify-between mb-6">
+    <div className="flex flex-col h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800">
+      <div className="p-6 flex flex-col h-full overflow-hidden">
+        <div className="flex items-center justify-between mb-6 flex-shrink-0">
           <h2 className="text-xl font-bold text-gray-900 dark:text-white tracking-tight">Channels</h2>
           <button 
             onClick={() => setIsCreating(!isCreating)}
@@ -62,8 +68,19 @@ const Sidebar = ({ user, activeRoom, onSelectRoom, onOpenNickname }) => {
           </button>
         </div>
 
+        <div className="relative mb-4 flex-shrink-0">
+          <input
+            type="text"
+            placeholder="Search channels..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white text-sm"
+          />
+          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+        </div>
+
         {isCreating && (
-          <form onSubmit={handleCreateRoom} className="mb-4 animate-in fade-in slide-in-from-top-2 duration-200">
+          <form onSubmit={handleCreateRoom} className="mb-4 flex-shrink-0 animate-in fade-in slide-in-from-top-2 duration-200">
             <input
               type="text"
               placeholder="e.g. general"
@@ -98,8 +115,9 @@ const Sidebar = ({ user, activeRoom, onSelectRoom, onOpenNickname }) => {
           </form>
         )}
 
-        <div className="space-y-1 overflow-y-auto">
-          {rooms.map((room) => (
+        <div className="space-y-1 overflow-y-auto flex-1 pb-4">
+          {!searchTerm.trim() && <div className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase px-2 mb-2">🔥 Open Rooms</div>}
+          {filteredRooms.map((room) => (
             <button
               key={room.id}
               onClick={() => onSelectRoom(room.id)}
@@ -117,13 +135,20 @@ const Sidebar = ({ user, activeRoom, onSelectRoom, onOpenNickname }) => {
                 )}
                 <span className="font-medium truncate">{room.name}</span>
               </div>
-              <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ml-2 ${
-                activeRoom === room.id 
-                  ? 'bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300' 
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
-              }`}>
-                {room.usersCount || 0}
-              </span>
+              <div className="flex flex-col items-end gap-1 flex-shrink-0 ml-2">
+                <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+                  activeRoom === room.id 
+                    ? 'bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300' 
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
+                }`}>
+                  👥 {room.usersCount || 0}
+                </span>
+                {room.messagesCount > 0 && (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 dark:bg-red-500/20 dark:text-red-400 border border-red-200 dark:border-red-500/30 line-height-none min-w-[20px] text-center shadow-sm">
+                    {room.messagesCount > 99 ? '99+' : room.messagesCount}
+                  </span>
+                )}
+              </div>
             </button>
           ))}
         </div>
