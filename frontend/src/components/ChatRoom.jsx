@@ -7,32 +7,43 @@ const ChatRoom = ({ user, roomId, roomConfig, onLeaveRoom }) => {
   const [newMessage, setNewMessage] = useState('');
   const messagesEndRef = useRef(null);
   const [roomData, setRoomData] = useState(null);
+  const [isJoined, setIsJoined] = useState(false);
+  const [showMembers, setShowMembers] = useState(false);
+
+  const userRef = useRef(user);
+  const roomConfigRef = useRef(roomConfig);
+
+  useEffect(() => {
+    userRef.current = user;
+    roomConfigRef.current = roomConfig;
+  }, [user, roomConfig]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const [isJoined, setIsJoined] = useState(false);
-
   useEffect(() => {
-    if (!roomId || !user) return;
+    if (!roomId || !user?.uid) return;
     
     setMessages([]);
     setIsJoined(false);
+    setShowMembers(false);
 
     const attemptJoin = (pwd) => {
+      const u = userRef.current;
+      const conf = roomConfigRef.current;
       socket.emit('join_room', {
         roomId,
-        user: { uid: user.uid, displayName: user.displayName, photoURL: user.photoURL },
-        isPrivate: roomConfig?.isPrivate || false,
-        password: pwd || roomConfig?.password || ''
+        user: { uid: u.uid, displayName: u.displayName, photoURL: u.photoURL },
+        isPrivate: conf?.isPrivate || false,
+        password: pwd || conf?.password || ''
       });
     };
 
     attemptJoin();
 
     const handleJoinError = (msg) => {
-      const pwd = window.prompt(`${msg}\n방 비밀번호를 입력해주세요:`);
+      const pwd = window.prompt(`${msg}`);
       if (pwd !== null) {
         attemptJoin(pwd);
       } else {
@@ -63,13 +74,23 @@ const ChatRoom = ({ user, roomId, roomConfig, onLeaveRoom }) => {
     socket.on('receive_message', handleReceiveMessage);
 
     return () => {
-      socket.emit('leave_room', { roomId, userUid: user.uid });
+      socket.emit('leave_room', { roomId, userUid: user?.uid });
       socket.off('join_error', handleJoinError);
       socket.off('join_success', handleJoinSuccess);
       socket.off('room_data', handleRoomData);
       socket.off('receive_message', handleReceiveMessage);
     };
-  }, [roomId, user, roomConfig]);
+  }, [roomId, user?.uid]);
+
+  useEffect(() => {
+    if (isJoined && user?.uid && user?.displayName) {
+      socket.emit('update_profile', {
+        roomId,
+        userUid: user.uid,
+        newDisplayName: user.displayName
+      });
+    }
+  }, [user?.displayName, isJoined, roomId]);
 
   useEffect(() => {
     scrollToBottom();
@@ -107,9 +128,12 @@ const ChatRoom = ({ user, roomId, roomConfig, onLeaveRoom }) => {
         <div className="flex items-center md:pl-0 pl-10">
           {roomData?.isPrivate ? <Lock size={20} className="text-gray-400 mr-2" /> : <Hash size={24} className="text-gray-400 mr-2 hidden md:block" />}
           <h2 className="text-xl font-bold text-gray-900 dark:text-white max-w-[150px] sm:max-w-none truncate">{roomId}</h2>
-          <span className="ml-4 text-sm text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 px-2 py-1 rounded-full border border-gray-200 dark:border-gray-700 shadow-sm hidden sm:inline-block">
+          <button 
+            onClick={() => setShowMembers(!showMembers)}
+            className="ml-4 text-sm text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 px-3 py-1 rounded-full border border-gray-200 dark:border-gray-700 shadow-sm hidden sm:flex items-center hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+          >
             {roomData?.users?.length || 0} members
-          </span>
+          </button>
         </div>
         {roomId !== 'general' && (
           <button onClick={() => { if (window.confirm("방을 나가시겠습니까?")) onLeaveRoom(); }} className="flex items-center gap-2 px-3 py-1.5 text-sm text-red-500 bg-red-50 hover:bg-red-100 dark:bg-red-500/10 dark:hover:bg-red-500/20 rounded-lg transition-colors ml-2 flex-shrink-0">
@@ -118,6 +142,26 @@ const ChatRoom = ({ user, roomId, roomConfig, onLeaveRoom }) => {
           </button>
         )}
       </div>
+
+      {/* Member List Dropdown */}
+      {showMembers && (
+        <div className="absolute top-[72px] left-1/2 sm:left-32 -translate-x-1/2 sm:translate-x-0 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-xl z-20 animate-in fade-in slide-in-from-top-2 p-2 hidden sm:block">
+          <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase px-3 py-2 border-b border-gray-100 dark:border-gray-700 mb-2">
+            Participants ({roomData?.users?.length || 0})
+          </h3>
+          <div className="max-h-60 overflow-y-auto space-y-1">
+            {roomData?.users?.map((u) => (
+              <div key={u.uid} className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-gray-50 dark:bg-gray-700/50 transition">
+                <img src={u.photoURL || `https://ui-avatars.com/api/?name=${u.displayName}`} alt="avatar" className="w-8 h-8 rounded-full shadow-sm" />
+                <div className="flex flex-col">
+                  <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{u.displayName}</span>
+                  {u.uid === user.uid && <span className="text-[10px] text-blue-600 font-extrabold bg-blue-50 dark:bg-blue-500/10 dark:text-blue-400 px-1.5 py-0.5 rounded-md w-fit mt-0.5">Me</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">

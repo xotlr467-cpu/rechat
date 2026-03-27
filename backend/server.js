@@ -33,9 +33,14 @@ io.on('connection', (socket) => {
   socket.on('join_room', ({ roomId, user, isPrivate, password }) => {
     if (rooms.has(roomId)) {
       const existingRoom = rooms.get(roomId);
-      if (existingRoom.isPrivate && existingRoom.password !== password) {
-        socket.emit('join_error', '비밀번호가 일치하지 않습니다.');
-        return;
+      if (existingRoom.isPrivate) {
+        if (!password) {
+          socket.emit('join_error', '비밀방입니다. 암호를 입력해주세요.');
+          return;
+        } else if (existingRoom.password !== password) {
+          socket.emit('join_error', '비밀번호가 일치하지 않습니다.');
+          return;
+        }
       }
     } else {
       rooms.set(roomId, { 
@@ -74,6 +79,22 @@ io.on('connection', (socket) => {
       socket.leave(roomId);
       io.to(roomId).emit('room_update', room);
       io.emit('room_update');
+    }
+  });
+
+  socket.on('update_profile', ({ roomId, userUid, newDisplayName }) => {
+    const room = rooms.get(roomId);
+    if (room && userUid && newDisplayName) {
+      let updated = false;
+      const userToUpdate = room.users.find(u => u.uid === userUid);
+      if (userToUpdate) {
+        userToUpdate.displayName = newDisplayName;
+        updated = true;
+      }
+      if (updated) {
+        io.to(roomId).emit('room_update', room);
+        io.emit('room_update');
+      }
     }
   });
 

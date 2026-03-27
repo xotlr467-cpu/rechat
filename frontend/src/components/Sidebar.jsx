@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { socket } from '../socket';
-import { Hash, Plus, LogOut, Settings, Lock } from 'lucide-react';
+import { Hash, Plus, LogOut, Settings, Lock, Eye, EyeOff } from 'lucide-react';
 import { auth } from '../firebase';
 
 const Sidebar = ({ user, activeRoom, onSelectRoom, onOpenNickname }) => {
@@ -8,6 +8,7 @@ const Sidebar = ({ user, activeRoom, onSelectRoom, onOpenNickname }) => {
   const [newRoomName, setNewRoomName] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
 
   useEffect(() => {
@@ -76,13 +77,22 @@ const Sidebar = ({ user, activeRoom, onSelectRoom, onOpenNickname }) => {
               <label htmlFor="isPrivate" className="text-xs text-gray-600 dark:text-gray-300">비밀방 만들기</label>
             </div>
             {isPrivate && (
-              <input
-                type="password"
-                placeholder="비밀번호 설정"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white placeholder-gray-400 text-sm mb-2"
-              />
+              <div className="relative mb-2">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="비밀번호 설정"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white placeholder-gray-400 text-sm pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
             )}
             <button type="submit" disabled={!newRoomName.trim() || (isPrivate && !password.trim())} className="w-full py-2 bg-blue-500 text-white rounded-xl text-sm font-semibold hover:bg-blue-600 disabled:opacity-50">생성하기</button>
           </form>
