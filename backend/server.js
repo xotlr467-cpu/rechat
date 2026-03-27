@@ -39,12 +39,33 @@ const emitSafeRoomList = () => {
   io.emit('room_list', roomList);
 };
 
+const broadcastRoomUpdate = (room) => {
+  const creatorUser = room.users.find(u => u.uid === room.creatorUid);
+  if (creatorUser) {
+    const creatorSocket = io.sockets.sockets.get(creatorUser.socketId);
+    if (creatorSocket) {
+      creatorSocket.emit('room_update', { filterMode: 'creator', ...room, password: room.password, bannedUids: room.bannedUids });
+    }
+  }
+  const safeRoom = { filterMode: 'safe', ...room, password: undefined, bannedUids: undefined };
+  for (const u of room.users) {
+    if (u.uid !== room.creatorUid) {
+      const socket = io.sockets.sockets.get(u.socketId);
+      if (socket) socket.emit('room_update', safeRoom);
+    }
+  }
+};
+
 io.on('connection', (socket) => {
   console.log(`User connected: ${socket.id}`);
 
   socket.on('join_room', ({ roomId, user, isPrivate, password }) => {
     if (rooms.has(roomId)) {
       const existingRoom = rooms.get(roomId);
+      if (existingRoom.bannedUids && existingRoom.bannedUids.some(b => b.uid === user?.uid)) {
+        socket.emit('join_error', '방장 권한에 의해 차단(영구 퇴장)되어 입장하실 수 없습니다.');
+        return;
+      }
       if (existingRoom.isPrivate && user?.uid !== existingRoom.creatorUid) {
         if (!password) {
           socket.emit('join_error', '비밀방입니다. 암호를 입력해주세요.');
@@ -62,7 +83,8 @@ io.on('connection', (socket) => {
         messages: [],
         isPrivate: !!isPrivate,
         password: password || '',
-        creatorUid: user?.uid || null
+        creatorUid: user?.uid || null,
+        bannedUids: []
       });
       emitSafeRoomList();
     }
@@ -80,12 +102,10 @@ io.on('connection', (socket) => {
     }
     
     socket.emit('join_success', roomId);
-    // Only send the password if the user is the creator
-    const roomPayload = { ...room, password: (user?.uid === room.creatorUid ? room.password : undefined) };
+    const roomPayload = { ...room, password: (user?.uid === room.creatorUid ? room.password : undefined), bannedUids: (user?.uid === room.creatorUid ? room.bannedUids : undefined) };
     socket.emit('room_data', roomPayload);
     
-    const safeRoomForOthers = { ...room, password: undefined };
-    io.to(roomId).emit('room_update', safeRoomForOthers);
+    broadcastRoomUpdate(room);
     emitSafeRoomList();
   });
 
@@ -95,7 +115,7 @@ io.on('connection', (socket) => {
       room.users = room.users.filter(u => u.uid !== userUid);
       socket.leave(roomId);
       
-      io.to(roomId).emit('room_update', { ...room, password: undefined });
+      broadcastRoomUpdate(room);
       emitSafeRoomList();
     }
   });
@@ -110,7 +130,7 @@ io.on('connection', (socket) => {
         updated = true;
       }
       if (updated) {
-        io.to(roomId).emit('room_update', { ...room, password: undefined });
+        broadcastRoomUpdate(room);
       }
     }
   });
@@ -164,15 +184,26 @@ io.on('connection', (socket) => {
     if (room && room.creatorUid === userUid) {
       const targetUser = room.users.find(u => u.uid === targetUid);
       if (targetUser) {
+        if (!room.bannedUids) room.bannedUids = [];
+        room.bannedUids.push({ uid: targetUser.uid, displayName: targetUser.displayName, photoURL: targetUser.photoURL });
+        
         room.users = room.users.filter(u => u.uid !== targetUid);
         const targetSocket = io.sockets.sockets.get(targetUser.socketId);
         if (targetSocket) {
           targetSocket.leave(roomId);
           targetSocket.emit('kicked');
         }
-        io.to(roomId).emit('room_update', { ...room, password: undefined });
+        broadcastRoomUpdate(room);
         emitSafeRoomList();
       }
+    }
+  });
+
+  socket.on('unban_user', ({ roomId, userUid, targetUid }) => {
+    const room = rooms.get(roomId);
+    if (room && room.creatorUid === userUid && room.bannedUids) {
+      room.bannedUids = room.bannedUids.filter(b => b.uid !== targetUid);
+      broadcastRoomUpdate(room);
     }
   });
 
@@ -193,7 +224,7 @@ io.on('connection', (socket) => {
       const userIndex = room.users.findIndex(u => u.socketId === socket.id);
       if (userIndex !== -1) {
         room.users.splice(userIndex, 1);
-        io.to(roomId).emit('room_update', { ...room, password: undefined });
+        broadcastRoomUpdate(room);
       }
     }
     emitSafeRoomList();

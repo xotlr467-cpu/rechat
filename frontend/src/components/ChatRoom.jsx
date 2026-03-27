@@ -83,6 +83,7 @@ const ChatRoom = ({ user, roomId, roomConfig, onLeaveRoom }) => {
     socket.on('join_error', handleJoinError);
     socket.on('join_success', handleJoinSuccess);
     socket.on('room_data', handleRoomData);
+    socket.on('room_update', handleRoomData); // Realtime sync
     socket.on('receive_message', handleReceiveMessage);
     socket.on('kicked', handleKicked);
     socket.on('room_deleted', handleRoomDeleted);
@@ -92,6 +93,7 @@ const ChatRoom = ({ user, roomId, roomConfig, onLeaveRoom }) => {
       socket.off('join_error', handleJoinError);
       socket.off('join_success', handleJoinSuccess);
       socket.off('room_data', handleRoomData);
+      socket.off('room_update', handleRoomData);
       socket.off('receive_message', handleReceiveMessage);
       socket.off('kicked', handleKicked);
       socket.off('room_deleted', handleRoomDeleted);
@@ -220,7 +222,7 @@ const ChatRoom = ({ user, roomId, roomConfig, onLeaveRoom }) => {
           </h3>
           <div className="max-h-60 overflow-y-auto space-y-1">
             {roomData?.users?.map((u) => (
-              <div key={u.uid} className="flex items-center justify-between px-3 py-2 rounded-xl hover:bg-gray-50 dark:bg-gray-700/50 transition">
+              <div key={u.uid} className="flex items-center justify-between px-3 py-2 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
                 <div className="flex items-center gap-3">
                   <img src={u.photoURL || `https://ui-avatars.com/api/?name=${u.displayName}`} alt="avatar" className="w-8 h-8 rounded-full shadow-sm" />
                   <div className="flex flex-col">
@@ -236,6 +238,28 @@ const ChatRoom = ({ user, roomId, roomConfig, onLeaveRoom }) => {
                 </div>
               </div>
             ))}
+            
+            {roomData?.creatorUid === user?.uid && roomData?.bannedUids?.length > 0 && (
+              <div className="mt-4 pt-2 border-t border-gray-100 dark:border-gray-700">
+                <h3 className="text-[10px] font-bold text-red-500 uppercase px-3 mb-2 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
+                  차단된 멤버 ({roomData.bannedUids.length})
+                </h3>
+                <div className="space-y-1">
+                  {roomData.bannedUids.map(b => (
+                    <div key={b.uid} className="flex items-center justify-between px-3 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/30 transition">
+                      <div className="flex items-center gap-2 opacity-50">
+                        <img src={b.photoURL || `https://ui-avatars.com/api/?name=${b.displayName}`} alt="avatar" className="w-6 h-6 rounded-full grayscale" />
+                        <span className="text-xs font-semibold text-gray-900 dark:text-gray-100 line-through decoration-gray-400">{b.displayName}</span>
+                      </div>
+                      <button onClick={() => { if(window.confirm(`${b.displayName}님의 차단을 해제하시겠습니까?`)) socket.emit('unban_user', { roomId, userUid: user.uid, targetUid: b.uid }) }} className="text-[10px] text-green-600 border border-green-200 dark:border-green-500/30 hover:bg-green-50 dark:hover:bg-green-500/10 px-1.5 py-0.5 rounded-md font-bold transition">
+                        차단 해제
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

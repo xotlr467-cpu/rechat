@@ -12,6 +12,15 @@ const Sidebar = ({ user, activeRoom, onSelectRoom, onOpenNickname }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
 
+  const [lastReadCounts, setLastReadCounts] = useState(() => {
+    const saved = localStorage.getItem('rechat_read_counts');
+    return saved ? JSON.parse(saved) : {};
+  });
+
+  useEffect(() => {
+    localStorage.setItem('rechat_read_counts', JSON.stringify(lastReadCounts));
+  }, [lastReadCounts]);
+
   useEffect(() => {
     socket.emit('get_rooms');
     
@@ -28,9 +37,18 @@ const Sidebar = ({ user, activeRoom, onSelectRoom, onOpenNickname }) => {
 
     return () => {
       socket.off('room_list', handleRoomList);
-      socket.off('room_update', handleRoomUpdate);
+      socket.off('room_update');
     };
   }, []);
+
+  useEffect(() => {
+    if (activeRoom) {
+      const room = rooms.find(r => r.id === activeRoom);
+      if (room && room.messagesCount > (lastReadCounts[activeRoom] || 0)) {
+        setLastReadCounts(prev => ({ ...prev, [activeRoom]: room.messagesCount }));
+      }
+    }
+  }, [activeRoom, rooms]);
 
   const handleCreateRoom = (e) => {
     e.preventDefault();
@@ -51,7 +69,7 @@ const Sidebar = ({ user, activeRoom, onSelectRoom, onOpenNickname }) => {
   };
 
   const filteredRooms = rooms.filter(room => {
-    if (!searchTerm.trim()) return !room.isPrivate;
+    if (!searchTerm.trim()) return !room.isPrivate || room.id === activeRoom;
     return room.name.toLowerCase().includes(searchTerm.toLowerCase());
   });
 
@@ -117,40 +135,43 @@ const Sidebar = ({ user, activeRoom, onSelectRoom, onOpenNickname }) => {
 
         <div className="space-y-1 overflow-y-auto flex-1 pb-4">
           {!searchTerm.trim() && <div className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase px-2 mb-2">🔥 Open Rooms</div>}
-          {filteredRooms.map((room) => (
-            <button
-              key={room.id}
-              onClick={() => onSelectRoom(room.id)}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 group ${
-                activeRoom === room.id
-                  ? 'bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:text-gray-900 dark:hover:text-gray-200'
-              }`}
-            >
-              <div className="flex items-center gap-3 overflow-hidden">
-                {room.isPrivate ? (
-                  <Lock size={16} className={activeRoom === room.id ? 'opacity-100 flex-shrink-0' : 'opacity-40 group-hover:opacity-70 flex-shrink-0'} />
-                ) : (
-                  <Hash size={18} className={activeRoom === room.id ? 'opacity-100 flex-shrink-0' : 'opacity-40 group-hover:opacity-70 flex-shrink-0'} />
-                )}
-                <span className="font-medium truncate">{room.name}</span>
-              </div>
-              <div className="flex flex-col items-end gap-1 flex-shrink-0 ml-2">
-                <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+          {filteredRooms.map((room) => {
+            const unreadCount = room.messagesCount - (lastReadCounts[room.id] || 0);
+            return (
+              <button
+                key={room.id}
+                onClick={() => onSelectRoom(room.id)}
+                className={`w-full flex justify-between items-center px-4 py-3 rounded-xl transition-all duration-200 ${
                   activeRoom === room.id 
-                    ? 'bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300' 
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
-                }`}>
-                  👥 {room.usersCount || 0}
-                </span>
-                {room.messagesCount > 0 && (
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 dark:bg-red-500/20 dark:text-red-400 border border-red-200 dark:border-red-500/30 line-height-none min-w-[20px] text-center shadow-sm">
-                    {room.messagesCount > 99 ? '99+' : room.messagesCount}
+                    ? 'bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 font-semibold shadow-sm ring-1 ring-blue-500/20' 
+                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100'
+                }`}
+              >
+                <div className="flex items-center gap-3 overflow-hidden">
+                  {room.isPrivate ? (
+                    <Lock size={16} className={activeRoom === room.id ? 'opacity-100 flex-shrink-0' : 'opacity-40 group-hover:opacity-70 flex-shrink-0'} />
+                  ) : (
+                    <Hash size={18} className={activeRoom === room.id ? 'opacity-100 flex-shrink-0' : 'opacity-40 group-hover:opacity-70 flex-shrink-0'} />
+                  )}
+                  <span className="font-medium truncate">{room.name}</span>
+                </div>
+                <div className="flex flex-col items-end gap-1 flex-shrink-0 ml-2">
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+                    activeRoom === room.id 
+                      ? 'bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300' 
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
+                  }`}>
+                    👥 {room.usersCount || 0}
                   </span>
-                )}
-              </div>
-            </button>
-          ))}
+                  {unreadCount > 0 && activeRoom !== room.id && (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 dark:bg-red-500/20 dark:text-red-400 border border-red-200 dark:border-red-500/30 line-height-none min-w-[20px] text-center shadow-sm">
+                      {unreadCount > 99 ? '99+' : unreadCount}
+                    </span>
+                  )}
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
 
